@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"runtime"
 
@@ -36,8 +37,14 @@ import (
 type NetConf struct {
 	hns.NetConf
 
-	IPMasq               bool
-	clusterNetworkPrefix net.IPNet
+	ipmasq               bool      `json:"ipmasq,omitempty"`
+	clusterNetworkPrefix net.IPNet `json:"clusterprefix,omitempty"`
+}
+type K8sCniEnvArgs struct {
+	types.CommonArgs
+	K8S_POD_NAMESPACE          types.UnmarshallableString `json:"K8S_POD_NAMESPACE,omitempty"`
+	K8S_POD_NAME               types.UnmarshallableString `json:"K8S_POD_NAME,omitempty"`
+	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString `json:"K8S_POD_INFRA_CONTAINER_ID,omitempty"`
 }
 
 func init() {
@@ -47,20 +54,36 @@ func init() {
 	runtime.LockOSThread()
 }
 
+func parseCniArgs(args string) (*K8sCniEnvArgs, error) {
+	podConfig := K8sCniEnvArgs{}
+	err := types.LoadArgs(args, &podConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &podConfig, nil
+}
+
 func loadNetConf(bytes []byte) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
+	log.Printf("Loaded NetConf %v", n)
 	return n, n.CNIVersion, nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	log.Printf("[cni-net] Processing ADD command with args {ContainerID:%v Netns:%v IfName:%v Args:%v Path:%v}.",
+		args.ContainerID, args.Netns, args.IfName, args.Args, args.Path)
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err
 	}
-
+	cniargs, err := parseCniArgs(args.Args)
+	k8sNamespace := "default"
+	if err == nil {
+		k8sNamespace = string(cniargs.K8S_POD_NAMESPACE)
+	}
 	networkName := n.Name
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
@@ -71,7 +94,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("network %v not found", networkName)
 	}
 
-	if !strings.EqualFold(hnsNetwork.Type,"L2Bridge") {
+	if !strings.EqualFold(hnsNetwork.Type, "L2Bridge") {
 		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
@@ -99,20 +122,31 @@ func cmdAdd(args *skel.CmdArgs) error {
 		gw[len(gw)-1] += 2
 
 		// NAT based on the the configured cluster network
-		if n.IPMasq {
+		if n.ipmasq {
 			n.ApplyOutboundNatPolicy(n.clusterNetworkPrefix.String())
+		}
+
+		nameservers := strings.Join(n.DNS.Nameservers, ",")
+		if result.DNS.Nameservers != nil {
+			nameservers = strings.Join(result.DNS.Nameservers, ",")
+		}
+
+		dnsSuffix := ""
+		if len(n.DNS.Search) > 0 {
+			dnsSuffix = k8sNamespace + "." + n.DNS.Search[0]
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-			DNSSuffix:      result.DNS.Domain,
+			DNSServerList:  nameservers,
+			DNSSuffix:      dnsSuffix,
 			GatewayAddress: gw.String(),
 			IPAddress:      result.IPs[0].Address.IP,
 			Policies:       n.MarshalPolicies(),
 		}
 
+		log.Printf("Adding Hns Endpoint %v", hnsEndpoint)
 		return hnsEndpoint, nil
 	})
 
@@ -129,6 +163,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	log.Printf("[cni-net] Processing DEL command with args {ContainerID:%v Netns:%v IfName:%v Args:%v Path:%v}.",
+		args.ContainerID, args.Netns, args.IfName, args.Args, args.Path)
 	n, _, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err

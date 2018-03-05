@@ -251,12 +251,12 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
-		n.Delegate["type"] = "win-l2bridge"
+		n.Delegate["type"] = "l2bridge"
 	}
 
 	// if flannel needs ipmasq - get the plugin to configure it
 	// (this is the opposite of how linux works - on linux the flannel daemon configure ipmasq)
-	n.Delegate["IPMasq"] = *fenv.ipmasq
+	n.Delegate["ipmasq"] = *fenv.ipmasq
 	n.Delegate["clusterNetworkPrefix"] = fenv.nw.String()
 
 	n.Delegate["cniVersion"] = "0.2.0"

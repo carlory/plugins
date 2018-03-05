@@ -17,6 +17,7 @@ package hns
 import (
 	"encoding/json"
 	"github.com/containernetworking/cni/pkg/types"
+	"log"
 	"strings"
 )
 
@@ -27,7 +28,7 @@ type NetConf struct {
 }
 
 type policyArgument struct {
-	Type  string
+	Name  string
 	Value map[string]interface{}
 }
 
@@ -40,7 +41,8 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 
 	var result []json.RawMessage
 	for _, policyArg := range n.AdditionalArgs {
-		if !strings.EqualFold(policyArg.Type, "EndpointPolicy") {
+		log.Printf("PolicyArgs[%v]", policyArg)
+		if !strings.EqualFold(policyArg.Name, "EndpointPolicy") {
 			continue
 		}
 		if data, err := json.Marshal(policyArg.Value); err == nil {
@@ -51,7 +53,6 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 	return result
 }
 
-
 // ApplyOutboundNatPolicy applies NAT Policy in VFP using HNS
 // Simultaneously an exception is added for the network that has to be Nat'd
 func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
@@ -60,7 +61,7 @@ func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
 	}
 
 	for _, policy := range n.AdditionalArgs {
-		if !strings.EqualFold(policy.Type, "EndpointPolicy") {
+		if !strings.EqualFold(policy.Name, "EndpointPolicy") {
 			continue
 		}
 
@@ -94,7 +95,7 @@ func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
 
 	// didn't find the policy, add it
 	natEntry := policyArgument{
-		Type: "EndpointPolicy",
+		Name: "EndpointPolicy",
 		Value: map[string]interface{}{
 			"Type": "OutBoundNAT",
 			"ExceptionList": []interface{}{
@@ -114,7 +115,7 @@ func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 
 	// if its already present, leave untouched
 	for _, policy := range n.AdditionalArgs {
-		if policy.Type == "EndpointPolicy" {
+		if policy.Name == "EndpointPolicy" {
 			if hasKey(policy.Value, "PA") {
 				// found it, don't override
 				return
@@ -128,7 +129,7 @@ func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 		"PA":   paAddress,
 	}
 	paPolicy := &policyArgument{
-		Type:  "EndpointPolicy",
+		Name:  "EndpointPolicy",
 		Value: paPolicyData,
 	}
 

@@ -14,7 +14,7 @@ for d in $PLUGINS; do
 		then
 			GOBIN=${OUTDIR} go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
 		else
-			go build -o "${OUTDIR}/$plugin.exe" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			go build -o "${OUTDIR}/$plugin.exe" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d" 
 		fi
 	fi
 done

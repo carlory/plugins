@@ -32,7 +32,7 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
-				Expect(policy.Type).Should(Equal("EndpointPolicy"))
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
@@ -59,7 +59,7 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
-				Expect(policy.Type).Should(Equal("EndpointPolicy"))
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
@@ -85,7 +85,7 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
-				Expect(policy.Type).Should(Equal("EndpointPolicy"))
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
@@ -106,7 +106,7 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
-				Expect(policy.Type).Should(Equal("EndpointPolicy"))
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
@@ -126,13 +126,13 @@ var _ = Describe("HNS NetConf", func() {
 				n := NetConf{
 					AdditionalArgs: []policyArgument{
 						{
-							Type: "EndpointPolicy",
+							Name: "EndpointPolicy",
 							Value: map[string]interface{}{
 								"someKey": "someValue",
 							},
 						},
 						{
-							Type: "someOtherType",
+							Name: "someOtherType",
 							Value: map[string]interface{}{
 								"someOtherKey": "someOtherValue",
 							},
@@ -165,7 +165,7 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
-				Expect(policy.Type).Should(Equal("EndpointPolicy"))
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
