@@ -62,13 +62,13 @@ func DeprovisionEndpoint(epName string, netns string, containerID string) error 
 	err = hcsshim.HotDetachEndpoint(containerID, hnsEndpoint.Id)
 	if err != nil {
 		log.Printf("[win-cni] Failed to detach endpoint %v, err:%v", epName, err)
-		return nil
+		// Do not consider this as failure, else this would leak endpoints
 	}
 
 	_, err = hnsEndpoint.Delete()
 	if err != nil {
 		log.Printf("[win-cni] Failed to delete endpoint %v, err:%v", epName, err)
-		return nil
+		// Do not return error
 	}
 
 	return nil
@@ -83,7 +83,7 @@ func ProvisionEndpoint(epName string, expectedNetworkId string, containerID stri
 	// check if endpoint already exists
 	createEndpoint := true
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if hnsEndpoint != nil && hnsEndpoint.VirtualNetwork != expectedNetworkId {
+	if hnsEndpoint != nil && hnsEndpoint.VirtualNetwork == expectedNetworkId {
 		log.Printf("[win-cni] Found existing endpoint %v", epName)
 		createEndpoint = false
 	}

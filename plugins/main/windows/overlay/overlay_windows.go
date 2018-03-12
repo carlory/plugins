@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 
 	"github.com/Microsoft/hcsshim"
@@ -39,11 +40,27 @@ type NetConf struct {
 	endpointMacPrefix string `json:"endpointMacPrefix,omitempty"`
 }
 
+type K8sCniEnvArgs struct {
+	types.CommonArgs
+	K8S_POD_NAMESPACE          types.UnmarshallableString `json:"K8S_POD_NAMESPACE,omitempty"`
+	K8S_POD_NAME               types.UnmarshallableString `json:"K8S_POD_NAME,omitempty"`
+	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString `json:"K8S_POD_INFRA_CONTAINER_ID,omitempty"`
+}
+
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
 	// must ensure that the goroutine does not jump from OS thread to thread
 	runtime.LockOSThread()
+}
+
+func parseCniArgs(args string) (*K8sCniEnvArgs, error) {
+	podConfig := K8sCniEnvArgs{}
+	err := types.LoadArgs(args, &podConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &podConfig, nil
 }
 
 func loadNetConf(bytes []byte) (*NetConf, string, error) {
@@ -55,9 +72,17 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	log.Printf("[cni-net] Processing ADD command with args {ContainerID:%v Netns:%v IfName:%v Args:%v Path:%v}.",
+		args.ContainerID, args.Netns, args.IfName, args.Args, args.Path)
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err
+	}
+
+	cniargs, err := parseCniArgs(args.Args)
+	k8sNamespace := "default"
+	if err == nil {
+		k8sNamespace = string(cniargs.K8S_POD_NAMESPACE)
 	}
 
 	if n.endpointMacPrefix != "" {
@@ -111,17 +136,28 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 
+		nameservers := strings.Join(n.DNS.Nameservers, ",")
+		if result.DNS.Nameservers != nil {
+			nameservers = strings.Join(result.DNS.Nameservers, ",")
+		}
+
+		dnsSuffix := ""
+		if len(n.DNS.Search) > 0 {
+			dnsSuffix = k8sNamespace + "." + n.DNS.Search[0]
+		}
+
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-			DNSSuffix:      result.DNS.Domain,
+			DNSServerList:  nameservers,
+			DNSSuffix:      dnsSuffix,
 			GatewayAddress: gw,
 			IPAddress:      ipAddr,
 			MacAddress:     macAddr,
 			Policies:       n.MarshalPolicies(),
 		}
 
+		log.Printf("Adding Hns Endpoint %v", hnsEndpoint)
 		return hnsEndpoint, nil
 	})
 
@@ -138,6 +174,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	log.Printf("[cni-net] Processing DEL command with args {ContainerID:%v Netns:%v IfName:%v Args:%v Path:%v}.",
+		args.ContainerID, args.Netns, args.IfName, args.Args, args.Path)
 	n, _, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err
